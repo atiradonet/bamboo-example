@@ -1,0 +1,28 @@
+{
+  "name": "bamboo-example-app",
+  "version": "1.0.0",
+  "description": "Intentionally vulnerable TypeScript API for Snyk + Bamboo demo",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts"
+  },
+  "dependencies": {
+    "express": "4.17.1",
+    "lodash": "4.17.20",
+    "jsonwebtoken": "8.5.1",
+    "axios": "0.21.1",
+    "ejs": "3.1.6",
+    "body-parser": "1.19.0",
+    "cors": "2.8.5"
+  },
+  "devDependencies": {
+    "typescript": "4.9.5",
+    "@types/express": "4.17.17",
+    "@types/node": "18.19.0",
+    "@types/lodash": "4.14.191",
+    "@types/cors": "2.8.13",
+    "@types/jsonwebtoken": "9.0.0"
+  }
+}

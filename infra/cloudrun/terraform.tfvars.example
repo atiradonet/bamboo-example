@@ -1,0 +1,4 @@
+project_id   = "your-gcp-project-id"
+region       = "us-central1"
+image        = "gcr.io/your-gcp-project-id/bamboo-example-app:latest"
+service_name = "bamboo-example-app"

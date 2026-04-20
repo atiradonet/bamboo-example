@@ -14,10 +14,18 @@ provider "google" {
   region  = var.region
 }
 
+# --- Enable APIs ---
+
+resource "google_project_service" "compute" {
+  service            = "compute.googleapis.com"
+  disable_on_destroy = false
+}
+
 # --- Networking ---
 
 resource "google_compute_network" "bamboo" {
   name                    = var.network_name
+  depends_on              = [google_project_service.compute]
   auto_create_subnetworks = true
 }
 
@@ -94,7 +102,8 @@ resource "google_compute_instance" "bamboo" {
 # --- Load Balancer ---
 
 resource "google_compute_global_address" "bamboo_ip" {
-  name = "bamboo-lb-ip"
+  name       = "bamboo-lb-ip"
+  depends_on = [google_project_service.compute]
 }
 
 resource "google_compute_instance_group" "bamboo" {
@@ -110,7 +119,8 @@ resource "google_compute_instance_group" "bamboo" {
 }
 
 resource "google_compute_health_check" "bamboo" {
-  name = "bamboo-health-check"
+  name       = "bamboo-health-check"
+  depends_on = [google_project_service.compute]
 
   timeout_sec         = 10
   check_interval_sec  = 15

@@ -14,11 +14,13 @@ This directory contains Terraform configurations for provisioning the demo envir
 - Terraform >= 1.5
 - Docker (to build and push the application image)
 
-Enable the required APIs:
+Enable all required APIs (run this once before any Terraform commands):
 
 ```bash
-gcloud services enable compute.googleapis.com run.googleapis.com
+./enable-apis.sh YOUR_PROJECT_ID
 ```
+
+This enables Compute Engine, Cloud Run, Container Registry, Artifact Registry, Cloud Build, IAM, and Resource Manager APIs. Wait 1-2 minutes for propagation before proceeding.
 
 ## Step 1: Provision Bamboo
 

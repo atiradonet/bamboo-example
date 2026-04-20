@@ -1,0 +1,16 @@
+---
+version: 2
+
+permissions:
+  - plan:
+      project-key: SNYK
+      key: BAMEX
+
+    roles:
+      - logged-in-users:
+          - view
+          - build
+
+    users: {}
+
+    groups: {}

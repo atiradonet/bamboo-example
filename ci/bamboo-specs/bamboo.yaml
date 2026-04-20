@@ -1,0 +1,263 @@
+---
+version: 2
+
+plan:
+  project-key: SNYK
+  key: BAMEX
+  name: Snyk Bamboo Example
+
+triggers:
+  - remote
+
+# ---------------------------------------------------------------------------
+# Variables
+# ---------------------------------------------------------------------------
+# SNYK_TOKEN must be configured as a Bamboo global variable
+# (Admin > Global variables). The Snyk CLI reads it automatically.
+variables:
+  GCP_PROJECT_ID: "YOUR_PROJECT_ID"
+  GCP_REGION: "us-central1"
+  IMAGE_NAME: "gcr.io/${bamboo.GCP_PROJECT_ID}/bamboo-example-app"
+  IMAGE_TAG: "${bamboo.buildNumber}"
+  SNYK_SEVERITY_THRESHOLD: "high"
+  FAIL_ON_SNYK_FINDINGS: "false"
+
+repositories:
+  - bamboo-example:
+      type: github
+
+docker:
+  enabled: true
+
+requirements:
+  - system.docker.executable
+
+# ---------------------------------------------------------------------------
+# Stages
+# ---------------------------------------------------------------------------
+stages:
+  - Build:
+      jobs:
+        - Build Application
+  - Snyk Open Source:
+      jobs:
+        - SCA Scan
+  - Snyk Code:
+      jobs:
+        - SAST Scan
+  - Snyk Container:
+      jobs:
+        - Container Scan
+  - Deploy:
+      jobs:
+        - Deploy to Cloud Run
+
+# ---------------------------------------------------------------------------
+# Jobs
+# ---------------------------------------------------------------------------
+
+Build Application:
+  key: BUILD
+  tasks:
+    - checkout:
+        force-clean-build: true
+
+    - script:
+        description: "Install dependencies and compile TypeScript"
+        interpreter: SHELL
+        scripts:
+          - |
+            set -euo pipefail
+            cd app
+            npm ci
+            npm run build
+
+    - script:
+        description: "Build and push Docker image"
+        interpreter: SHELL
+        scripts:
+          - |
+            set -euo pipefail
+            cd app
+            docker build \
+              -t ${bamboo.IMAGE_NAME}:${bamboo.IMAGE_TAG} \
+              -t ${bamboo.IMAGE_NAME}:latest \
+              .
+            docker push ${bamboo.IMAGE_NAME}:${bamboo.IMAGE_TAG}
+            docker push ${bamboo.IMAGE_NAME}:latest
+
+  artifacts:
+    - name: app-dist
+      location: app/dist
+      pattern: "**/*"
+      shared: true
+
+    - name: package-files
+      location: app
+      pattern: "package*.json"
+      shared: true
+
+SCA Scan:
+  key: SCA
+  tasks:
+    - checkout:
+        force-clean-build: true
+
+    - script:
+        description: "Install Snyk CLI"
+        interpreter: SHELL
+        scripts:
+          - |
+            set -euo pipefail
+            npm install -g snyk
+
+    - script:
+        description: "Snyk Open Source scan"
+        interpreter: SHELL
+        scripts:
+          - |
+            set -euo pipefail
+            cd app
+            npm ci
+
+            echo "--- Snyk Open Source Scan ---"
+            SNYK_EXIT=0
+            snyk test \
+              --severity-threshold=${bamboo.SNYK_SEVERITY_THRESHOLD} \
+              --json-file-output=snyk-os-results.json \
+              || SNYK_EXIT=$?
+
+            echo "Snyk Open Source exit code: ${SNYK_EXIT}"
+
+            if [ "${bamboo.FAIL_ON_SNYK_FINDINGS}" = "true" ] && [ ${SNYK_EXIT} -ne 0 ]; then
+              echo "FAIL_ON_SNYK_FINDINGS is true — failing the build."
+              exit ${SNYK_EXIT}
+            fi
+
+            echo "Snyk findings logged. Continuing."
+
+  artifacts:
+    - name: snyk-os-results
+      location: app
+      pattern: "snyk-os-results.json"
+      shared: true
+
+SAST Scan:
+  key: SAST
+  tasks:
+    - checkout:
+        force-clean-build: true
+
+    - script:
+        description: "Install Snyk CLI"
+        interpreter: SHELL
+        scripts:
+          - |
+            set -euo pipefail
+            npm install -g snyk
+
+    - script:
+        description: "Snyk Code scan"
+        interpreter: SHELL
+        scripts:
+          - |
+            set -euo pipefail
+            cd app
+
+            echo "--- Snyk Code Scan ---"
+            SNYK_EXIT=0
+            snyk code test \
+              --severity-threshold=${bamboo.SNYK_SEVERITY_THRESHOLD} \
+              --json-file-output=snyk-code-results.json \
+              || SNYK_EXIT=$?
+
+            echo "Snyk Code exit code: ${SNYK_EXIT}"
+
+            if [ "${bamboo.FAIL_ON_SNYK_FINDINGS}" = "true" ] && [ ${SNYK_EXIT} -ne 0 ]; then
+              echo "FAIL_ON_SNYK_FINDINGS is true — failing the build."
+              exit ${SNYK_EXIT}
+            fi
+
+            echo "Snyk findings logged. Continuing."
+
+  artifacts:
+    - name: snyk-code-results
+      location: app
+      pattern: "snyk-code-results.json"
+      shared: true
+
+Container Scan:
+  key: CONTAINER
+  tasks:
+    - checkout:
+        force-clean-build: true
+
+    - script:
+        description: "Install Snyk CLI"
+        interpreter: SHELL
+        scripts:
+          - |
+            set -euo pipefail
+            npm install -g snyk
+
+    - script:
+        description: "Snyk Container scan"
+        interpreter: SHELL
+        scripts:
+          - |
+            set -euo pipefail
+
+            echo "--- Pulling image from registry ---"
+            docker pull ${bamboo.IMAGE_NAME}:${bamboo.IMAGE_TAG}
+
+            echo "--- Snyk Container Scan ---"
+            SNYK_EXIT=0
+            snyk container test \
+              ${bamboo.IMAGE_NAME}:${bamboo.IMAGE_TAG} \
+              --file=app/Dockerfile \
+              --severity-threshold=${bamboo.SNYK_SEVERITY_THRESHOLD} \
+              --json-file-output=snyk-container-results.json \
+              || SNYK_EXIT=$?
+
+            echo "Snyk Container exit code: ${SNYK_EXIT}"
+
+            if [ "${bamboo.FAIL_ON_SNYK_FINDINGS}" = "true" ] && [ ${SNYK_EXIT} -ne 0 ]; then
+              echo "FAIL_ON_SNYK_FINDINGS is true — failing the build."
+              exit ${SNYK_EXIT}
+            fi
+
+            echo "Snyk findings logged. Continuing."
+
+  artifacts:
+    - name: snyk-container-results
+      location: .
+      pattern: "snyk-container-results.json"
+      shared: true
+
+Deploy to Cloud Run:
+  key: DEPLOY
+  tasks:
+    - script:
+        description: "Deploy to Cloud Run"
+        interpreter: SHELL
+        scripts:
+          - |
+            set -euo pipefail
+
+            echo "--- Deploying to Cloud Run ---"
+            gcloud run deploy bamboo-example-app \
+              --image=${bamboo.IMAGE_NAME}:${bamboo.IMAGE_TAG} \
+              --region=${bamboo.GCP_REGION} \
+              --project=${bamboo.GCP_PROJECT_ID} \
+              --platform=managed \
+              --allow-unauthenticated \
+              --port=3000 \
+              --memory=512Mi \
+              --max-instances=3 \
+              --quiet
+
+            SERVICE_URL=$(gcloud run services describe bamboo-example-app \
+              --region=${bamboo.GCP_REGION} \
+              --project=${bamboo.GCP_PROJECT_ID} \
+              --format='value(status.url)')
+            echo "Deployed to: ${SERVICE_URL}"
